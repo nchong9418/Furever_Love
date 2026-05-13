@@ -1,9 +1,10 @@
 import * as React from "react";
-import { SafeAreaView, View, Text, TouchableOpacity, Animated } from "react-native";
+import { View, Text, TouchableOpacity, Animated } from "react-native";
 
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
 import DogCard from "../components/DogCard";
+import ScreenScaffold from "../components/ScreenScaffold";
 
 import { DOGS } from "../data/dogs";
 import { usePlainLeftSwipe } from "../hooks/usePlainLeftSwipe";
@@ -72,7 +73,7 @@ export default function SwipeScreen({ navigation, favorites }) {
   const current = DOGS[index];
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
 
       <HeaderBar
@@ -140,6 +141,6 @@ export default function SwipeScreen({ navigation, favorites }) {
       <Text style={styles.hintLine}>
         Likes remaining today: {10 - dailyLikes}
       </Text>
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }

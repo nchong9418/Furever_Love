@@ -1,6 +1,5 @@
 import * as React from "react";
 import {
-  SafeAreaView,
   ScrollView,
   View,
   Text,
@@ -10,6 +9,7 @@ import {
 
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
+import ScreenScaffold from "../components/ScreenScaffold";
 
 import { DOGS } from "../data/dogs";
 import { styles } from "../styles/styles";
@@ -23,7 +23,7 @@ export default function FavoritesScreen({ navigation, favorites }) {
   const favDogs = DOGS.filter((dog) => favoriteIds.has(dog.dog_id));
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
 
       <HeaderBar
@@ -41,7 +41,7 @@ export default function FavoritesScreen({ navigation, favorites }) {
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
         {favDogs.length === 0 ? (
-          <View style={{ paddingTop: 12 }}>
+          <View style={styles.favEmpty}>
             <Text style={styles.muted}>No favorites yet.</Text>
           </View>
         ) : (
@@ -66,6 +66,6 @@ export default function FavoritesScreen({ navigation, favorites }) {
           ))
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }

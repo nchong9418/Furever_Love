@@ -43,9 +43,9 @@ export function AuthProvider({ children }) {
      * Uses the API helper to send registration data to the backend.
      * If registration succeeds, it stores the returned user ID in state.
      */
-    const register = async ({ name, email, password }) => {
+    const register = async ({ role, email, password }) => {
         try {
-            const data = await registerRequest({ name, email, password });
+            const data = await registerRequest({ role, email, password });
 
             // Store the new user's ID in state after successful registration.
             const newUserId = data?.user?.id;

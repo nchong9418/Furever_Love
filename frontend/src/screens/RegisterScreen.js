@@ -1,10 +1,9 @@
 import * as React from "react";
-import { SafeAreaView, View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import BackBubble from "../components/BackBubble";
+import ScreenScaffold from "../components/ScreenScaffold";
 import { styles } from "../styles/styles";
 import { useAuth } from "../hooks/useAuth";
-
-const API_BASE_URL = "https://nonseasonal-superelaborately-velma.ngrok-free.dev";
 
 /**
  * RegisterScreen
@@ -14,117 +13,151 @@ export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [role, setRole] = React.useState("adopter");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [message, setMessage] = React.useState("");
+  const [isError, setIsError] = React.useState(false);
+  const { register } = useAuth();
 
   const handleRegister = async () => {
-    if (!email || !password) {
+    if (!email.trim() || !password) {
+      setIsError(true);
+      setMessage("Email and password are required.");
       Alert.alert("Validation Error", "Email and password are required");
       return;
     }
 
+    if (password.length < 6) {
+      setIsError(true);
+      setMessage("Use a password with at least 6 characters.");
+      return;
+    }
+
     try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+      setIsSubmitting(true);
+      setIsError(false);
+      setMessage("Creating account...");
+
+      const data = await register({
+        email: email.trim(),
+        password,
+        role,
       });
 
-      const data = await res.json();
+      setMessage(
+        data.localOnly
+          ? "Account saved locally. Use the same email and password to log in."
+          : "Account created. Use the same email and password to log in."
+      );
 
-      if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
-
-      console.log("Registered user:", data); // data.id should exist
-      
-      if (data.devVerifyLink) {
-        const tokenParam = data.devVerifyLink.split("token=")[1];
-        await fetch(`${API_BASE_URL}/api/auth/verify-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: tokenParam }),
-        });
-        console.log("Email auto-verified for dev");
-      }
-
-      Alert.alert("Success", "Registration and verification succeeded!");
-
-      // Step 3: Navigate to login
-      navigation.navigate("Login");
+      setTimeout(() => {
+        navigation.navigate(role === "shelter" ? "ShelterLogin" : "AdopteeLogin");
+      }, 650);
     } catch (error) {
-      Alert.alert("Register failed", error.message);
+      setIsError(true);
+      setMessage(error.message || "Registration failed.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
 
       <View style={styles.center}>
-        <Text style={styles.pageTitle}>Create Account</Text>
+        <View style={styles.formPanel}>
+          <Text style={styles.eyebrow}>R01 / New record</Text>
+          <Text style={styles.pageTitle}>Create Account</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#687179"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor="#687179"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
 
-        <Text style={{ marginTop: 10, fontWeight: "700" }}>
-          Account Type:
-        </Text>
+          <Text style={styles.roleLabel}>Account Type:</Text>
 
-        <View style={{ flexDirection: "row", marginTop: 6 }}>
-          <TouchableOpacity onPress={() => setRole("adopter")}>
-            <Text
-              style={{
-                marginRight: 15,
-                fontWeight: "800",
-                color: role === "adopter" ? "#ff6b6b" : "#6b7280",
-              }}
+          <View style={styles.roleRow}>
+            <TouchableOpacity
+              onPress={() => setRole("adopter")}
+              style={[
+                styles.roleChip,
+                role === "adopter" && styles.roleChipActive,
+              ]}
+              activeOpacity={0.9}
             >
-              Adopter
+              <Text
+                style={[
+                  styles.roleChipText,
+                  role === "adopter" && styles.roleChipTextActive,
+                ]}
+              >
+                Adopter
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setRole("shelter")}
+              style={[
+                styles.roleChip,
+                role === "shelter" && styles.roleChipActive,
+              ]}
+              activeOpacity={0.9}
+            >
+              <Text
+                style={[
+                  styles.roleChipText,
+                  role === "shelter" && styles.roleChipTextActive,
+                ]}
+              >
+                Shelter
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, styles.buttonYellow]}
+            onPress={handleRegister}
+            activeOpacity={0.9}
+            disabled={isSubmitting}
+          >
+            <Text style={[styles.buttonText, styles.buttonTextInk]}>
+              {isSubmitting ? "Signing Up..." : "Sign Up"}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => setRole("shelter")}>
+          {!!message && (
             <Text
-              style={{
-                fontWeight: "800",
-                color: role === "shelter" ? "#ff6b6b" : "#6b7280",
-              }}
+              style={[
+                styles.formMessage,
+                isError && styles.formMessageError,
+              ]}
             >
-              Shelter
+              {message}
             </Text>
+          )}
+
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.linkButton}
+          >
+            <Text style={styles.linkText}>Already have an account? Log In</Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={handleRegister}
-          activeOpacity={0.9}
-        >
-          <Text style={styles.buttonText}>Sign Up</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={{ marginTop: 12 }}
-        >
-          <Text style={{ color: "#6b7280", fontWeight: "700" }}>
-            Already have an account? Log In
-          </Text>
-        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }
