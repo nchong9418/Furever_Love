@@ -7,8 +7,14 @@ const configuredApiBaseUrl =
 const isLocalWeb =
   typeof window !== "undefined" &&
   ["localhost", "127.0.0.1"].includes(window.location.hostname);
-const API_BASE_URL = configuredApiBaseUrl || (isLocalWeb ? "" : undefined);
+export const API_BASE_URL = (configuredApiBaseUrl ||
+  (isLocalWeb ? "http://localhost:4000" : undefined)
+)?.replace(/\/+$/, "");
 const LOCAL_USERS_KEY = "furever-love.local-users";
+
+export function isLocalDemoToken(token) {
+  return typeof token === "string" && token.startsWith("local-demo-token-");
+}
 
 async function requestJson(path, options) {
   if (!API_BASE_URL) {
@@ -19,10 +25,20 @@ async function requestJson(path, options) {
   const timeout = setTimeout(() => controller.abort(), 8000);
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-      ...options,
-      signal: controller.signal,
-    });
+    let response;
+
+    try {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        ...options,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("Auth server timed out.");
+      }
+
+      throw error;
+    }
 
     const text = await response.text();
     let data = {};
@@ -127,7 +143,15 @@ export async function loginRequest({ email, password }) {
   } catch (error) {
     try {
       return await localLogin({ email, password });
-    } catch {
+    } catch (localError) {
+      if (
+        /Failed to fetch|Network request failed|offline|No auth server|timed out/i.test(
+          error.message
+        )
+      ) {
+        throw localError;
+      }
+
       throw error;
     }
   }

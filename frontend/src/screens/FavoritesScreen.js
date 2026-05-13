@@ -11,7 +11,6 @@ import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
 import ScreenScaffold from "../components/ScreenScaffold";
 
-import { DOGS } from "../data/dogs";
 import { styles } from "../styles/styles";
 
 /**
@@ -19,8 +18,7 @@ import { styles } from "../styles/styles";
  * Lists favorited dogs and opens the selected dog in SwipeScreen.
  */
 export default function FavoritesScreen({ navigation, favorites }) {
-  const { favoriteIds } = favorites;
-  const favDogs = DOGS.filter((dog) => favoriteIds.has(dog.dog_id));
+  const { favoriteDogs } = favorites;
 
   return (
     <ScreenScaffold>
@@ -40,12 +38,12 @@ export default function FavoritesScreen({ navigation, favorites }) {
       />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
-        {favDogs.length === 0 ? (
+        {favoriteDogs.length === 0 ? (
           <View style={styles.favEmpty}>
             <Text style={styles.muted}>No favorites yet.</Text>
           </View>
         ) : (
-          favDogs.map((dog) => (
+          favoriteDogs.map((dog) => (
             <TouchableOpacity
               key={dog.dog_id}
               style={styles.favRow}

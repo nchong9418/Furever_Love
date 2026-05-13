@@ -45,12 +45,15 @@ export default function RegisterScreen({ navigation }) {
 
       setMessage(
         data.localOnly
-          ? "Account saved locally. Use the same email and password to log in."
-          : "Account created. Use the same email and password to log in."
+          ? "Account saved locally. Opening the demo."
+          : "Account created. Opening your dashboard."
       );
 
       setTimeout(() => {
-        navigation.navigate(role === "shelter" ? "ShelterLogin" : "AdopteeLogin");
+        navigation.reset({
+          index: 0,
+          routes: [{ name: role === "shelter" ? "Shelter" : "Home" }],
+        });
       }, 650);
     } catch (error) {
       setIsError(true);

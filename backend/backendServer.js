@@ -45,6 +45,73 @@ const DB_CONFIG = {
 
 
 const APP_BASE_URL = process.env.APP_BASE_URL || `http://0.0.0.0:${PORT}`;
+let isDbReady = false;
+let nextDemoUserId = 1000;
+const demoUsers = [];
+const demoLikes = [];
+
+const demoAnimals = [
+  {
+    id: 1,
+    shelter_id: 1,
+    name: 'Shiba',
+    species: 'dog',
+    breed: 'Shiba Inu',
+    age: 3,
+    sex: 'female',
+    description: 'Great with people, curious, and ready for a bright new routine.',
+    status: 'available',
+    created_at: '2024-02-15T00:00:00.000Z',
+  },
+  {
+    id: 2,
+    shelter_id: 2,
+    name: 'Doge',
+    species: 'dog',
+    breed: 'Shiba Inu',
+    age: 4,
+    sex: 'male',
+    description: 'Very friendly with people and happiest as the center of attention.',
+    status: 'available',
+    created_at: '2024-01-10T00:00:00.000Z',
+  },
+  {
+    id: 3,
+    shelter_id: 3,
+    name: 'Snowy',
+    species: 'dog',
+    breed: 'Japanese Spitz',
+    age: 2,
+    sex: 'female',
+    description: 'Playful, affectionate, and always ready for outdoor walks.',
+    status: 'available',
+    created_at: '2024-03-02T00:00:00.000Z',
+  },
+  {
+    id: 4,
+    shelter_id: 4,
+    name: 'Marshmallow',
+    species: 'dog',
+    breed: 'Samoyed',
+    age: 1,
+    sex: 'male',
+    description: 'Friendly, fluffy, and built for maximum soft chaos.',
+    status: 'available',
+    created_at: '2024-03-18T00:00:00.000Z',
+  },
+  {
+    id: 5,
+    shelter_id: 5,
+    name: 'Sandy',
+    species: 'dog',
+    breed: 'Golden Retriever',
+    age: 1,
+    sex: 'female',
+    description: 'A sweet beach pup with big energy and an easy grin.',
+    status: 'available',
+    created_at: '2024-04-01T00:00:00.000Z',
+  },
+];
 
 
 // Email transport 
@@ -139,6 +206,8 @@ async function initDb() {
   );
 
   `);
+
+  isDbReady = true;
 }
 
 /* =========================
@@ -158,6 +227,23 @@ function authMiddleware(req, res, next) {
   }
 }
 
+function optionalAuthMiddleware(req, res, next) {
+  const authHeader = req.header('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+  } catch {
+    req.user = null;
+  }
+
+  return next();
+}
+
 function requireShelter(req, res, next) {
   if (req.user?.role !== 'shelter') {
     return res.status(403).json({ error: 'Only shelter accounts can manage animals' });
@@ -167,6 +253,14 @@ function requireShelter(req, res, next) {
 
 function sha256Hex(input) {
   return crypto.createHash('sha256').update(input).digest('hex');
+}
+
+function signAuthToken(user) {
+  return jwt.sign(
+    { userId: String(user.id), email: user.email, role: user.role },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
 }
 
 async function sendVerificationEmail(email, verifyUrl) {
@@ -187,7 +281,7 @@ async function sendVerificationEmail(email, verifyUrl) {
 /* =========================
    ROUTES: HEALTH
 ========================= */
-app.get('/', (req, res) => res.json({ ok: true }));
+app.get('/', (req, res) => res.json({ ok: true, dbReady: isDbReady }));
 
 /* =========================
    ROUTES: AUTH
@@ -203,6 +297,31 @@ app.post('/api/auth/register', async (req, res) => {
   const safeRole = role === 'shelter' ? 'shelter' : 'adopter';
 
   try {
+    if (!isDbReady) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const existing = demoUsers.find((user) => user.email === normalizedEmail);
+      if (existing) return res.status(409).json({ error: 'User already exists' });
+
+      const user = {
+        id: String(nextDemoUserId++),
+        email: normalizedEmail,
+        password_hash: await bcrypt.hash(password, 10),
+        role: safeRole,
+        is_email_verified: true,
+      };
+
+      demoUsers.push(user);
+
+      return res.status(201).json({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isEmailVerified: true,
+        token: signAuthToken(user),
+        message: 'Registered in demo backend mode.',
+      });
+    }
+
     const [existing] = await pool.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
     if (existing.length > 0) return res.status(409).json({ error: 'User already exists' });
 
@@ -329,6 +448,25 @@ app.post('/api/auth/login', async (req, res) => {
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
 
   try {
+    if (!isDbReady) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const user = demoUsers.find((candidate) => candidate.email === normalizedEmail);
+      if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+
+      const match = await bcrypt.compare(password, user.password_hash);
+      if (!match) return res.status(401).json({ error: 'Invalid credentials' });
+
+      return res.json({
+        token: signAuthToken(user),
+        user: {
+          id: String(user.id),
+          email: user.email,
+          role: user.role,
+          isEmailVerified: true,
+        },
+      });
+    }
+
     const [rows] = await pool.query(
       'SELECT id, email, password_hash, role, is_email_verified FROM users WHERE email = ? LIMIT 1',
       [email]
@@ -366,9 +504,18 @@ app.post('/api/auth/login', async (req, res) => {
 // GET /api/animals
 // Shelter -> only their animals
 // Adopter -> only available animals
-app.get('/api/animals', authMiddleware, async (req, res) => {
+// Guest -> only available animals
+app.get('/api/animals', optionalAuthMiddleware, async (req, res) => {
   try {
-    if (req.user.role === 'shelter') {
+    if (!isDbReady) {
+      if (req.user?.role === 'shelter') {
+        return res.json(demoAnimals.filter((animal) => String(animal.shelter_id) === String(req.user.userId)));
+      }
+
+      return res.json(demoAnimals.filter((animal) => animal.status === 'available'));
+    }
+
+    if (req.user?.role === 'shelter') {
       const [rows] = await pool.query(
         `SELECT id, shelter_id, name, species, breed, age, sex, description, status, created_at
          FROM animals
@@ -395,6 +542,21 @@ app.get('/api/animals', authMiddleware, async (req, res) => {
 // GET /api/animals/:id
 app.get('/api/animals/:id', authMiddleware, async (req, res) => {
   try {
+    if (!isDbReady) {
+      const animal = demoAnimals.find((item) => String(item.id) === String(req.params.id));
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      if (req.user.role === 'shelter' && String(animal.shelter_id) !== String(req.user.userId)) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      if (req.user.role !== 'shelter' && animal.status !== 'available') {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      return res.json(animal);
+    }
+
     const [rows] = await pool.query(
       `SELECT id, shelter_id, name, species, breed, age, sex, description, status, created_at
        FROM animals
@@ -427,6 +589,24 @@ app.post('/api/animals', authMiddleware, requireShelter, async (req, res) => {
   const safeStatus = ['available', 'adopted', 'hold'].includes(status) ? status : 'available';
 
   try {
+    if (!isDbReady) {
+      const animal = {
+        id: demoAnimals.length + 1,
+        shelter_id: req.user.userId,
+        name,
+        species,
+        breed: breed || null,
+        age: typeof age === 'number' ? age : null,
+        sex: sex || null,
+        description: description || null,
+        status: safeStatus,
+        created_at: new Date().toISOString(),
+      };
+
+      demoAnimals.push(animal);
+      return res.status(201).json(animal);
+    }
+
     const [result] = await pool.query(
       `INSERT INTO animals (shelter_id, name, species, breed, age, sex, description, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -542,6 +722,36 @@ app.post('/api/animals/:id/like', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Only adopters can like animals' });
     }
 
+    if (!isDbReady) {
+      const animal = demoAnimals.find((item) => String(item.id) === String(animalId));
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+      if (animal.status !== 'available') {
+        return res.status(400).json({ error: 'Only available animals can be liked' });
+      }
+
+      const existing = demoLikes.find(
+        (like) => String(like.user_id) === String(userId) && String(like.animal_id) === String(animalId)
+      );
+      if (existing) return res.status(409).json({ error: 'You already swiped on this animal' });
+
+      const today = new Date().toDateString();
+      const todayLikes = demoLikes.filter(
+        (like) => String(like.user_id) === String(userId) && like.liked && like.swiped_at.toDateString() === today
+      );
+      if (todayLikes.length >= DAILY_LIKE_LIMIT) {
+        return res.status(429).json({ error: 'Daily like limit reached' });
+      }
+
+      demoLikes.push({
+        user_id: userId,
+        animal_id: animalId,
+        liked: true,
+        swiped_at: new Date(),
+      });
+
+      return res.status(201).json({ ok: true, message: 'Like recorded' });
+    }
+
     const [animals] = await pool.query(
       'SELECT id, status FROM animals WHERE id = ? LIMIT 1',
       [animalId]
@@ -593,6 +803,25 @@ app.post('/api/animals/:id/pass', authMiddleware, async (req, res) => {
       return res.status(403).json({ error: 'Only adopters can swipe animals' });
     }
 
+    if (!isDbReady) {
+      const animal = demoAnimals.find((item) => String(item.id) === String(animalId));
+      if (!animal) return res.status(404).json({ error: 'Animal not found' });
+
+      const existing = demoLikes.find(
+        (like) => String(like.user_id) === String(userId) && String(like.animal_id) === String(animalId)
+      );
+      if (existing) return res.status(409).json({ error: 'You already swiped on this animal' });
+
+      demoLikes.push({
+        user_id: userId,
+        animal_id: animalId,
+        liked: false,
+        swiped_at: new Date(),
+      });
+
+      return res.status(201).json({ ok: true, message: 'Pass recorded' });
+    }
+
     const [animals] = await pool.query(
       'SELECT id FROM animals WHERE id = ? LIMIT 1',
       [animalId]
@@ -632,11 +861,13 @@ app.post('/api/animals/:id/pass', authMiddleware, async (req, res) => {
 (async () => {
   try {
     await initDb();
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`API running on http://0.0.0.0:${PORT}`); //for connection from other devices 
-    });
   } catch (err) {
-    console.error('Failed to start server:', err);
-    process.exit(1);
+    isDbReady = false;
+    console.error(`Database unavailable; starting demo backend (${err.code || err.message})`);
   }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    const mode = isDbReady ? 'mysql' : 'demo';
+    console.log(`API running on http://0.0.0.0:${PORT} (${mode} mode)`); //for connection from other devices
+  });
 })();
