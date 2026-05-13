@@ -1,11 +1,12 @@
 import * as React from "react";
-import { SafeAreaView, View, Text, TouchableOpacity, Animated } from "react-native";
+import { View, Text, TouchableOpacity, Animated } from "react-native";
 
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
 import DogCard from "../components/DogCard";
+import ScreenScaffold from "../components/ScreenScaffold";
 
-import { DOGS } from "../data/dogs";
+import { fetchAnimalDeck, submitAnimalSwipe } from "../api/animalsApi";
 import { usePlainLeftSwipe } from "../hooks/usePlainLeftSwipe";
 import { useRevealBehindPhoto } from "../hooks/useRevealBehindPhoto";
 
@@ -17,7 +18,9 @@ import { styles } from "../styles/styles";
  */
 export default function SwipeScreen({ navigation, favorites }) {
   const { favoriteIds, toggleFavorite } = favorites;
+  const [dogs, setDogs] = React.useState([]);
   const [index, setIndex] = React.useState(0);
+  const [deckMessage, setDeckMessage] = React.useState("");
 
   /**
    * Daily swipe limit state
@@ -27,6 +30,27 @@ export default function SwipeScreen({ navigation, favorites }) {
   const [contactedDogs, setContactedDogs] = React.useState(new Set());
 
   const reveal = useRevealBehindPhoto();
+  const resetReveal = reveal.reset;
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    async function loadDogs() {
+      const result = await fetchAnimalDeck();
+      if (!mounted) return;
+
+      setDogs(result.dogs);
+      setDeckMessage(result.message);
+      resetReveal();
+      setIndex(0);
+    }
+
+    loadDogs();
+
+    return () => {
+      mounted = false;
+    };
+  }, [resetReveal]);
 
   /**
    * Reset daily swipe limit when date changes
@@ -45,13 +69,17 @@ export default function SwipeScreen({ navigation, favorites }) {
    * - Only once per dog
    * - Max 10 per day
    */
-  const handleContact = (dogId) => {
+  const handleContact = async (dog) => {
+    const dogId = String(dog.dog_id);
+
     if (contactedDogs.has(dogId)) return;
 
     if (dailyLikes >= 10) {
       alert("Daily like limit reached");
       return;
     }
+
+    await submitAnimalSwipe(dogId, "like");
 
     setDailyLikes((prev) => prev + 1);
 
@@ -69,10 +97,10 @@ export default function SwipeScreen({ navigation, favorites }) {
     },
   });
 
-  const current = DOGS[index];
+  const current = dogs[index];
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
 
       <HeaderBar
@@ -98,16 +126,16 @@ export default function SwipeScreen({ navigation, favorites }) {
           </View>
         ) : (
           <Animated.View
-	key={current.dog_id}
+            key={current.dog_id}
             style={{ flex: 1, transform: [{ translateX: swipe.swipeX }] }}
             {...swipe.panResponder.panHandlers}
           >
             <DogCard
               dog={current}
-              isFavorite={favoriteIds.has(current.dog_id)}
-              onToggleFavorite={() => toggleFavorite(current.dog_id)}
+              isFavorite={favoriteIds.has(String(current.dog_id))}
+              onToggleFavorite={() => toggleFavorite(current)}
               reveal={reveal}
-              onContact={() => handleContact(current.dog_id)}
+              onContact={() => handleContact(current)}
             />
           </Animated.View>
         )}
@@ -140,6 +168,8 @@ export default function SwipeScreen({ navigation, favorites }) {
       <Text style={styles.hintLine}>
         Likes remaining today: {10 - dailyLikes}
       </Text>
-    </SafeAreaView>
+
+      {!!deckMessage && <Text style={styles.hintLine}>{deckMessage}</Text>}
+    </ScreenScaffold>
   );
 }

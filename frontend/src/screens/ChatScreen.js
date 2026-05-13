@@ -1,6 +1,5 @@
 import * as React from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   ScrollView,
@@ -10,6 +9,7 @@ import {
 
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
+import ScreenScaffold from "../components/ScreenScaffold";
 import { styles } from "../styles/styles";
 
 /**
@@ -34,7 +34,7 @@ export default function ChatScreen({ navigation, route }) {
       {
         id: 2,
         sender: "You",
-        text: `Hi, I’m interested in ${dog.dog_name}.`,
+        text: `Hi, I'm interested in ${dog.dog_name}.`,
       },
     ];
   });
@@ -60,25 +60,16 @@ export default function ChatScreen({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
       <HeaderBar title="Chat" />
 
       <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: 16 }}>
-        <View
-          style={{
-            backgroundColor: "white",
-            borderRadius: 16,
-            padding: 14,
-            marginBottom: 12,
-          }}
-        >
-          <Text style={{ fontWeight: "900", fontSize: 16 }}>
+        <View style={styles.chatDogPanel}>
+          <Text style={styles.chatDogName}>
             {dog ? dog.dog_name : "Selected Dog"}
           </Text>
-          <Text style={{ marginTop: 4, color: "#6b7280", fontWeight: "700" }}>
-            {shelterName}
-          </Text>
+          <Text style={styles.chatShelter}>{shelterName}</Text>
         </View>
 
         <ScrollView
@@ -92,46 +83,16 @@ export default function ChatScreen({ navigation, route }) {
             return (
               <View
                 key={item.id}
-                style={{
-                  alignSelf: isUser ? "flex-end" : "flex-start",
-                  backgroundColor: isUser ? "#ff6b6b" : "white",
-                  borderRadius: 16,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  marginBottom: 10,
-                  maxWidth: "78%",
-                }}
+                style={[styles.chatBubble, isUser && styles.chatBubbleUser]}
               >
-                <Text
-                  style={{
-                    fontWeight: "900",
-                    marginBottom: 4,
-                    color: isUser ? "white" : "#111827",
-                  }}
-                >
-                  {item.sender}
-                </Text>
-
-                <Text
-                  style={{
-                    color: isUser ? "white" : "#111827",
-                    fontWeight: "600",
-                  }}
-                >
-                  {item.text}
-                </Text>
+                <Text style={styles.chatSender}>{item.sender}</Text>
+                <Text style={styles.chatBody}>{item.text}</Text>
               </View>
             );
           })}
         </ScrollView>
 
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginTop: 8,
-          }}
-        >
+        <View style={styles.chatInputRow}>
           <TextInput
             style={[
               styles.input,
@@ -142,25 +103,20 @@ export default function ChatScreen({ navigation, route }) {
               },
             ]}
             placeholder="Type a message"
+            placeholderTextColor="#687179"
             value={message}
             onChangeText={setMessage}
           />
 
           <TouchableOpacity
-            style={[
-              styles.button,
-              {
-                width: 92,
-                marginVertical: 0,
-              },
-            ]}
+            style={[styles.button, styles.sendButtonCompact]}
             onPress={handleSend}
             activeOpacity={0.9}
           >
-            <Text style={styles.buttonText}>Send</Text>
+            <Text style={[styles.buttonText, styles.buttonTextInk]}>Send</Text>
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }

@@ -1,7 +1,8 @@
 import * as React from "react";
-import { SafeAreaView, View, Text } from "react-native";
+import { View, Text } from "react-native";
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
+import ScreenScaffold from "../components/ScreenScaffold";
 import { styles } from "../styles/styles";
 
 /**
@@ -10,7 +11,7 @@ import { styles } from "../styles/styles";
  */
 export default function ShelterScreen({ navigation }) {
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
       <HeaderBar title="Shelter" />
 
@@ -20,6 +21,6 @@ export default function ShelterScreen({ navigation }) {
           This section is not implemented in the demo.
         </Text>
       </View>
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }

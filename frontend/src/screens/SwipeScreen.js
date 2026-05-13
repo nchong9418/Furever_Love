@@ -1,17 +1,16 @@
 import * as React from "react";
-import { SafeAreaView, View, Text, TouchableOpacity, Animated } from "react-native";
+import { View, Text, TouchableOpacity, Animated } from "react-native";
 
 import BackBubble from "../components/BackBubble";
 import HeaderBar from "../components/HeaderBar";
 import DogCard from "../components/DogCard";
+import ScreenScaffold from "../components/ScreenScaffold";
 
-import { DOGS } from "../data/dogs";
+import { fetchAnimalDeck, submitAnimalSwipe } from "../api/animalsApi";
 import { usePlainLeftSwipe } from "../hooks/usePlainLeftSwipe";
 import { useRevealBehindPhoto } from "../hooks/useRevealBehindPhoto";
 
 import { styles } from "../styles/styles";
-
-const API_BASE_URL = "http://localhost:4000/api";
 
 /**
  * SwipeScreen
@@ -21,19 +20,13 @@ const API_BASE_URL = "http://localhost:4000/api";
 export default function SwipeScreen({ navigation, route, favorites }) {
   const { favoriteIds, toggleFavorite } = favorites;
   const selectedDogId = route?.params?.selectedDogId ?? null;
-  const openedFromFavorites = selectedDogId !== null;
+  const selectedDogKey = selectedDogId === null ? null : String(selectedDogId);
+  const openedFromFavorites = selectedDogKey !== null;
 
-  /**
-   * Resolve the initial deck position once when the screen mounts.
-   */
-  const initialIndex = React.useMemo(() => {
-    if (!selectedDogId) return 0;
-
-    const foundIndex = DOGS.findIndex((dog) => dog.dog_id === selectedDogId);
-    return foundIndex >= 0 ? foundIndex : 0;
-  }, [selectedDogId]);
-
-  const [index, setIndex] = React.useState(initialIndex);
+  const [dogs, setDogs] = React.useState([]);
+  const [index, setIndex] = React.useState(0);
+  const [isLoadingDogs, setIsLoadingDogs] = React.useState(true);
+  const [deckMessage, setDeckMessage] = React.useState("");
   const [statusMessage, setStatusMessage] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -46,23 +39,41 @@ export default function SwipeScreen({ navigation, route, favorites }) {
   const [swipedDogs, setSwipedDogs] = React.useState(new Set());
 
   const reveal = useRevealBehindPhoto();
-  const current = DOGS[index];
+  const resetReveal = reveal.reset;
+  const current = dogs[index];
   const remainingSwipes = Math.max(0, 10 - dailySwipes);
 
   /**
-   * If the screen is opened from Favorites with a selected dog,
-   * move to that dog once when the route param changes.
+   * Load the live backend deck when available, falling back to local pop cards.
    */
   React.useEffect(() => {
-    if (!selectedDogId) return;
+    let mounted = true;
 
-    const foundIndex = DOGS.findIndex((dog) => dog.dog_id === selectedDogId);
-    if (foundIndex >= 0) {
-      setIndex(foundIndex);
-      reveal.reset();
+    async function loadDogs() {
+      setIsLoadingDogs(true);
+
+      const result = await fetchAnimalDeck();
+      if (!mounted) return;
+
+      const nextDogs = result.dogs;
+      const foundIndex = selectedDogKey
+        ? nextDogs.findIndex((dog) => String(dog.dog_id) === selectedDogKey)
+        : 0;
+
+      setDogs(nextDogs);
+      setIndex(foundIndex >= 0 ? foundIndex : 0);
+      setDeckMessage(result.message);
       setStatusMessage("");
+      resetReveal();
+      setIsLoadingDogs(false);
     }
-  }, [selectedDogId, reveal]);
+
+    loadDogs();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedDogKey, resetReveal]);
 
   /**
    * Reset placeholder daily swipe count when date changes.
@@ -81,9 +92,9 @@ export default function SwipeScreen({ navigation, route, favorites }) {
    * Advances to the next dog and resets the reveal state.
    */
   const goNext = React.useCallback(() => {
-    reveal.reset();
+    resetReveal();
     setIndex((prev) => prev + 1);
-  }, [reveal]);
+  }, [resetReveal]);
 
   /**
    * trackSwipe
@@ -92,11 +103,13 @@ export default function SwipeScreen({ navigation, route, favorites }) {
    */
   const trackSwipe = React.useCallback(
     (dogId) => {
+      const dogKey = String(dogId);
+
       if (openedFromFavorites) {
         return false;
       }
 
-      if (swipedDogs.has(dogId)) {
+      if (swipedDogs.has(dogKey)) {
         setStatusMessage("You already swiped on this dog");
         return false;
       }
@@ -109,7 +122,7 @@ export default function SwipeScreen({ navigation, route, favorites }) {
       setDailySwipes((prev) => Math.min(prev + 1, 10));
       setSwipedDogs((prev) => {
         const next = new Set(prev);
-        next.add(dogId);
+        next.add(dogKey);
         return next;
       });
 
@@ -117,36 +130,6 @@ export default function SwipeScreen({ navigation, route, favorites }) {
     },
     [dailySwipes, swipedDogs, openedFromFavorites]
   );
-
-  /**
-   * submitLike
-   * Attempts to call backend /like route.
-   * Falls back to demo mode if auth/backend is not available.
-   */
-  const submitLike = async (dogId) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/animals/${dogId}/like`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        throw new Error(data.error || "Like request failed");
-      }
-
-      return data;
-    } catch (err) {
-      return {
-        ok: false,
-        placeholder: true,
-        message: err.message,
-      };
-    }
-  };
 
   /**
    * handlePass
@@ -165,7 +148,12 @@ export default function SwipeScreen({ navigation, route, favorites }) {
 
     try {
       setIsSubmitting(true);
-      setStatusMessage("Pass recorded");
+
+      const result = await submitAnimalSwipe(current.dog_id, "pass");
+      setStatusMessage(
+        result.placeholder ? "Pass recorded in demo mode" : "Pass recorded"
+      );
+
       goNext();
     } catch (err) {
       setStatusMessage("Could not record pass");
@@ -196,7 +184,7 @@ export default function SwipeScreen({ navigation, route, favorites }) {
       try {
         setIsSubmitting(true);
 
-        const result = await submitLike(dog.dog_id);
+        const result = await submitAnimalSwipe(dog.dog_id, "like");
 
         if (result.placeholder) {
           setStatusMessage("Contact recorded in demo mode");
@@ -224,7 +212,7 @@ export default function SwipeScreen({ navigation, route, favorites }) {
   });
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <ScreenScaffold>
       <BackBubble navigation={navigation} />
 
       <HeaderBar
@@ -243,20 +231,25 @@ export default function SwipeScreen({ navigation, route, favorites }) {
       <View style={{ flex: 1 }}>
         {!current ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No more dogs</Text>
+            <Text style={styles.emptyTitle}>
+              {isLoadingDogs ? "Loading matches" : "No more dogs"}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Check back later for new arrivals!
+              {isLoadingDogs
+                ? "Fetching the latest adoption deck..."
+                : "Check back later for new arrivals!"}
             </Text>
           </View>
         ) : (
           <Animated.View
+            key={current.dog_id}
             style={{ flex: 1, transform: [{ translateX: swipe.swipeX }] }}
             {...(!openedFromFavorites ? swipe.panResponder.panHandlers : {})}
           >
             <DogCard
               dog={current}
-              isFavorite={favoriteIds.has(current.dog_id)}
-              onToggleFavorite={() => toggleFavorite(current.dog_id)}
+              isFavorite={favoriteIds.has(String(current.dog_id))}
+              onToggleFavorite={() => toggleFavorite(current)}
               reveal={reveal}
               onContact={() => handleContact(current)}
             />
@@ -296,7 +289,8 @@ export default function SwipeScreen({ navigation, route, favorites }) {
         </Text>
       )}
 
+      {!!deckMessage && <Text style={styles.hintLine}>{deckMessage}</Text>}
       {!!statusMessage && <Text style={styles.hintLine}>{statusMessage}</Text>}
-    </SafeAreaView>
+    </ScreenScaffold>
   );
 }

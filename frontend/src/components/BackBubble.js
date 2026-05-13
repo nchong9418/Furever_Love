@@ -7,9 +7,18 @@ import { styles } from "../styles/styles";
  * Top-left return symbol in a bubble
  */
 export default function BackBubble({ navigation }) {
+  const handlePress = () => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+
+    navigation.navigate("Login");
+  };
+
   return (
     <TouchableOpacity
-      onPress={() => navigation.goBack()}
+      onPress={handlePress}
       style={styles.backBubble}
       activeOpacity={0.85}
     >
