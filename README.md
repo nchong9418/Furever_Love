@@ -11,15 +11,15 @@
 5. Clone repository
 6. In a terminal run these next few commands to get the backend all working 
   - Recommended to be doing this with something like termux if familiar but steps for that will be omitted here
-  i). `cd backend` from project root 
-  ii). `npm install` just to ensure all packages are up to date
-  iii). `node backendServer.js` runs database + backend server
+  i). `cd backend` from project root \n
+  ii). `npm install` just to ensure all packages are up to date \n
+  iii). `node backendServer.js` runs database + backend server n\
 7. In a new terminal instance to get the application to run we make use of ngrok
   - Ensure that you have an ngrok account and the config has your own custom token preloaded for all functionality to work
-  i). `cd frontend` from project root
-  ii). `npm install` ensure all dependeices are updated
-  iii). `ngrok http 4000` starts an http server at port 4000 for external access
+  i). `cd frontend` from project root \n
+  ii). `npm install` ensure all dependeices are updated \n
+  iii). `ngrok http 4000` starts an http server at port 4000 for external access \n
 8. In another new terminal instance (keeping count there should be 3)
-  i). `cd frontend` from project root
-  ii). `npm install` ensure packages are up to date
-  iii). `npm start` starts the front end and expo, giving an QR code to have the project run on mobile and the option to press `W` to have an web interface of it pop up
+  i). `cd frontend` from project root \n
+  ii). `npm install` ensure packages are up to date \n
+  iii). `npm start` starts the front end and expo, giving an QR code to have the project run on mobile and the option to press `W` to have an web interface of it pop up \n
